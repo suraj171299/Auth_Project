@@ -1,13 +1,13 @@
 import { User } from "../models/user.model.js";
 import bcrypt from 'bcryptjs';
 import { generateTokenandSetCookie } from "../utils/generateTokenandSetCookie.js";
-import { sendVerificationEmail } from "../mailtrap/email.js";
+import { sendVerificationEmail, sendWelcomeEmail } from "../mailtrap/email.js";
 
 export const signup = async (req, res) => {
-    const { email, password, name } = req.body
+    const { email, password, username } = req.body
     
     try{
-        if(!email || !password || !name){
+        if(!email || !password || !username){
             throw new Error('All fields are required')
         }
 
@@ -22,7 +22,7 @@ export const signup = async (req, res) => {
         const user = new User({
             email,
             password: hashedPassword,
-            name,
+            username,
             verificationToken,
             verificationTokenExpiresAt: Date.now() + 24 * 60 * 60 * 1000
         })  
@@ -48,7 +48,44 @@ export const signup = async (req, res) => {
     }
 }
 
-export const signin = async (req, res) => {
+export const verifyEmail = async (req, res) => {
+    const { code } = req.body
+    try {
+        const user = await User.findOne({
+            verificationToken: code,
+            verificationTokenExpiresAt: { $gt: Date.now() }
+        })
+
+        if(!user){
+            res.status(400).json({ success: fasle, message: "Invalid or expired verification code"})
+        }
+
+        user.isVerified = true
+        user.verificationToken = undefined
+        user.verificationTokenExpiresAt = undefined
+        await user.save()
+
+        await sendWelcomeEmail(user.email, user.username)
+
+        res.status(200).json({
+            success: true, 
+            message: "Email verified successfully",
+            user: {
+                ...user._doc,
+                password: undefined
+            }
+        })
+
+    } catch (error) {
+        console.log('Error in verifying email', error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        })
+    }
+}
+
+export const login = async (req, res) => {
     res.send('signup')
 }
 
